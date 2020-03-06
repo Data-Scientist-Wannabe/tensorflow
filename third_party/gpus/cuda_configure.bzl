@@ -292,11 +292,34 @@ def _get_cxx_inc_directories_impl(repository_ctx, cc, lang_is_cpp, tf_sysroot):
     else:
         inc_dirs = stderr[index1 + 1:index2].strip()
 
-    return [
+    gcc_include = [
         _normalize_include_path(repository_ctx, _cxx_inc_convert(p))
         for p in inc_dirs.split("\n")
     ]
-
+    find_gcc = result.stderr.find("COLLECT_GCC=")
+    if find_gcc != -1:
+      find_gcc = result.stderr.find("=", find_gcc)
+      next_gcc = result.stderr.find("\n", find_gcc)
+      
+      gcc_dirname = repository_ctx.path(result.stderr[find_gcc + 1 : next_gcc]).dirname.dirname
+    else:
+      # Clang has the directory
+      find_gcc = result.stderr.find("InstalledDir: ")
+      if find_gcc != -1:
+        find_gcc = result.stderr.find(" ", find_gcc)
+        next_gcc = result.stderr.find("\n", find_gcc)
+        gcc_dirname = repository_ctx.path(result.stderr[find_gcc + 1 : next_gcc]).dirname
+      else:
+        # Fallback to the CC path
+        gcc_dirname = repository_ctx.path(cc).dirname.dirname
+    actual_gcc_dirname = str(gcc_dirname.realpath).strip()
+    gcc_dirname = str(gcc_dirname).strip()
+    if actual_gcc_dirname != gcc_dirname:
+        raw_gcc_include = [p.replace(actual_gcc_dirname, gcc_dirname) for p in gcc_include]
+        gcc_include = gcc_include + raw_gcc_include
+    return gcc_include
+    
+    
 def get_cxx_inc_directories(repository_ctx, cc, tf_sysroot):
     """Compute the list of default C and C++ include directories."""
 
